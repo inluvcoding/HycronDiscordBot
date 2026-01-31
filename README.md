@@ -39,14 +39,13 @@ npm install
    - Replace `YOUR_BOT_TOKEN_HERE` with your actual bot token
 
 5. Configure proxies (optional):
-   - Create `proxies.txt` in the same directory as the bot
-   - Add proxies in format `ip:port` (one per line)
+   - Proxies are automatically loaded from GitHub when you use `.setproxy on`
+   - Or manually create `proxies.txt` in format `ip:port` (one per line)
    - Example:
    ```
-   127.0.0.1:1080
+   124.248.168.90:1080
    192.168.1.1:9050
    ```
-   - Bot will auto-detect SOCKS4/SOCKS5
 
 6. Invite the bot to your server:
    - Go to OAuth2 > URL Generator
@@ -107,14 +106,19 @@ When disabled, all users will see "Hycron bot is now disabled by the owner" mess
 ### .setproxy [on/off]
 Admin only command to enable or disable proxy usage.
 
+When enabled, automatically loads proxies from GitHub (SOCKS4 + SOCKS5 mixed).
+
 Parameters:
-- `on`: Enable proxy (requires proxies.txt)
+- `on`: Enable proxy and load from GitHub
 - `off`: Disable proxy (use direct connection)
 
 Example:
 ```
 .setproxy on
 ```
+
+The bot will fetch fresh proxies from:
+- https://github.com/monosans/proxy-list (SOCKS4 + SOCKS5)
 
 ## Message Variants
 
@@ -141,25 +145,36 @@ The dashboard updates every 2 seconds until the duration expires.
 
 ## Proxy Support
 
-### Proxy Format
-Add proxies to `proxies.txt` in the format:
+### Automatic Proxy Loading
+When you use `.setproxy on`, the bot automatically fetches proxies from GitHub:
+- SOCKS5: https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks5.txt
+- SOCKS4: https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks4.txt
+
+The bot will:
+1. Download both SOCKS4 and SOCKS5 proxy lists
+2. Mix them together randomly
+3. Use the combined pool for spam sessions
+
+### Manual Proxy Setup (Optional)
+You can also add proxies manually to `proxies.txt` in the format:
 ```
 ip:port
 ```
 
 Example:
 ```
-127.0.0.1:1080
+124.248.168.90:1080
 192.168.1.1:9050
 45.76.123.45:1080
 ```
 
 ### Proxy Features
-- Automatic SOCKS4/SOCKS5 detection
+- Automatic SOCKS4/SOCKS5 detection from GitHub
 - Round-robin proxy rotation
 - Proxy status displayed in dashboard
 - Enable/disable via `.setproxy` command
 - Fallback to direct connection if proxy fails
+- Mixed SOCKS4 + SOCKS5 for better success rate
 
 ## Technical Details
 
