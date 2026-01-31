@@ -25,15 +25,46 @@ let botEnabled = true;
 let useProxy = false;
 let proxies = [];
 let currentProxyIndex = 0;
+let customMessages = [];
 
-const NGL_MESSAGES = [
+const DEFAULT_MESSAGES = [
     'Targetted by Hycron',
     'You got boomed by Hycron',
     'Hycron always on top!'
 ];
 
+const loadCustomMessages = () => {
+    try {
+        if (fs.existsSync('messages.txt')) {
+            const content = fs.readFileSync('messages.txt', 'utf-8');
+            const messages = content.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            if (messages.length > 0) {
+                customMessages = messages;
+                console.log(`Loaded ${customMessages.length} custom messages from messages.txt`);
+                return true;
+            } else {
+                console.log('messages.txt is empty, using default messages');
+                customMessages = DEFAULT_MESSAGES;
+                return false;
+            }
+        } else {
+            console.log('messages.txt not found, using default messages');
+            customMessages = DEFAULT_MESSAGES;
+            return false;
+        }
+    } catch (error) {
+        console.error('Error loading custom messages:', error);
+        customMessages = DEFAULT_MESSAGES;
+        return false;
+    }
+};
+
 const getRandomMessage = () => {
-    return NGL_MESSAGES[Math.floor(Math.random() * NGL_MESSAGES.length)];
+    const messages = customMessages.length > 0 ? customMessages : DEFAULT_MESSAGES;
+    return messages[Math.floor(Math.random() * messages.length)];
 };
 
 const loadProxies = async () => {
@@ -132,6 +163,7 @@ client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
     console.log('Hycron NGL Spam Bot is ready');
     console.log('Use .setproxy on to load proxies from GitHub');
+    loadCustomMessages();
     updateBotStatus();
 });
 
@@ -377,6 +409,25 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    if (command === 'reloadmsg') {
+        if (message.author.id !== ADMIN_ID) {
+            return message.reply('You do not have permission to use this command');
+        }
+
+        const hasCustom = loadCustomMessages();
+        const messageCount = customMessages.length;
+        const messageType = hasCustom ? 'custom messages from messages.txt' : 'default messages';
+        
+        const embed = new EmbedBuilder()
+            .setTitle('Messages Reloaded')
+            .setColor(0x57F287)
+            .setDescription(`Successfully reloaded ${messageCount} ${messageType}`)
+            .setFooter({ text: 'Hycron NGL Spam' })
+            .setTimestamp();
+        
+        return message.reply({ embeds: [embed] });
+    }
+
     if (!botEnabled) {
         const embed = new EmbedBuilder()
             .setTitle('Hycron Bot Disabled')
@@ -413,6 +464,9 @@ client.on('messageCreate', async (message) => {
     }
 
     if (command === 'hycron') {
+        const messageCount = customMessages.length;
+        const messageSource = customMessages === DEFAULT_MESSAGES ? 'default' : 'custom (messages.txt)';
+        
         const embed = new EmbedBuilder()
             .setTitle('Hycron NGL Spam Commands')
             .setColor(0x5865F2)
@@ -425,12 +479,17 @@ client.on('messageCreate', async (message) => {
                 },
                 {
                     name: '.ngl [username] [duration]',
-                    value: `Start NGL spam\nusername: Target NGL username\nduration: Duration in minutes (max ${MAX_DURATION})\nDefault threads: ${DEFAULT_THREADS}\nMax concurrent tasks: ${MAX_CONCURRENT_TASKS}`,
+                    value: `Start NGL spam\nusername: Target NGL username\nduration: Duration in minutes (max ${MAX_DURATION})\nDefault threads: ${DEFAULT_THREADS}\nMax concurrent tasks: ${MAX_CONCURRENT_TASKS}\nMessages: ${messageCount} ${messageSource}`,
                     inline: false
                 },
                 {
                     name: '.invite',
                     value: 'Get the bot invite link',
+                    inline: false
+                },
+                {
+                    name: 'Admin Commands',
+                    value: '.setstatus on/off - Toggle bot\n.setproxy on/off - Toggle proxy\n.reloadmsg - Reload messages from messages.txt',
                     inline: false
                 },
                 {
