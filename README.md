@@ -47,13 +47,24 @@ npm install
    192.168.1.1:9050
    ```
 
-6. Invite the bot to your server:
+6. Configure custom messages (optional):
+   - Create `messages.txt` to customize spam messages
+   - Add one message per line
+   - Bot will randomly select from your messages
+   - Example:
+   ```
+   Targetted by Hycron
+   You got boomed by Hycron
+   Hycron always on top!
+   ```
+
+7. Invite the bot to your server:
    - Go to OAuth2 > URL Generator
    - Select scopes: `bot`
    - Select permissions: `Send Messages`, `Embed Links`, `Read Message History`
    - Copy the generated URL and open it in your browser
 
-7. Start the bot:
+8. Start the bot:
 ```bash
 npm start
 ```
@@ -120,12 +131,41 @@ Example:
 The bot will fetch fresh proxies from:
 - https://github.com/monosans/proxy-list (SOCKS4 + SOCKS5)
 
+### .reloadmsg
+Admin only command to reload custom messages from messages.txt.
+
+Example:
+```
+.reloadmsg
+```
+
+After editing messages.txt, use this command to reload without restarting the bot.
+
 ## Message Variants
 
-The bot randomly selects one of these messages to send:
+### Custom Messages
+You can customize the messages sent by creating a `messages.txt` file:
+- One message per line
+- Bot will randomly select from your custom messages
+- Empty lines are ignored
+
+Example messages.txt:
+```
+Targetted by Hycron
+You got boomed by Hycron
+Hycron always on top!
+Hycron never stops
+You just got Hycron'd
+```
+
+### Default Messages
+If messages.txt doesn't exist or is empty, the bot uses these default messages:
 - "Targetted by Hycron"
 - "You got boomed by Hycron"
 - "Hycron always on top!"
+
+### Reloading Messages
+Use `.reloadmsg` command (admin only) to reload messages.txt without restarting the bot.
 
 ## Status Dashboard
 
