@@ -27,7 +27,7 @@ npm install
    - Copy the bot token
 
 4. Configure the bot:
-   - Open `hycron-bot.js`
+   - Open `index.js`
    - Replace `YOUR_BOT_TOKEN_HERE` with your actual bot token
 
 5. Invite the bot to your server:
