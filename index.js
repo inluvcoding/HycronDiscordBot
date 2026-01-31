@@ -36,50 +36,102 @@ const getRandomMessage = () => {
     return NGL_MESSAGES[Math.floor(Math.random() * NGL_MESSAGES.length)];
 };
 
-const loadProxies = () => {
+const loadProxies = async () => {
     try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf-8');
-            proxies = content.split('\n')
+        const socks5Url = 'https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks5.txt';
+        const socks4Url = 'https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks4.txt';
+        
+        console.log('Fetching proxies from GitHub...');
+        
+        const [socks5Response, socks4Response] = await Promise.all([
+            fetch(socks5Url).catch(() => null),
+            fetch(socks4Url).catch(() => null)
+        ]);
+        
+        let allProxies = [];
+        
+        if (socks5Response && socks5Response.ok) {
+            const socks5Text = await socks5Response.text();
+            const socks5Proxies = socks5Text.split('\n')
                 .map(line => line.trim())
-                .filter(line => line && line.includes(':'));
-            console.log(`Loaded ${proxies.length} proxies`);
-        } else {
-            console.log('proxies.txt not found');
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'socks5' }));
+            allProxies.push(...socks5Proxies);
+            console.log(`Loaded ${socks5Proxies.length} SOCKS5 proxies`);
+        }
+        
+        if (socks4Response && socks4Response.ok) {
+            const socks4Text = await socks4Response.text();
+            const socks4Proxies = socks4Text.split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'socks4' }));
+            allProxies.push(...socks4Proxies);
+            console.log(`Loaded ${socks4Proxies.length} SOCKS4 proxies`);
+        }
+        
+        for (let i = allProxies.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allProxies[i], allProxies[j]] = [allProxies[j], allProxies[i]];
+        }
+        
+        proxies = allProxies;
+        console.log(`Total proxies loaded: ${proxies.length} (mixed SOCKS4 and SOCKS5)`);
+        
+        if (proxies.length === 0) {
+            console.log('No proxies loaded from GitHub, checking local proxies.txt...');
+            if (fs.existsSync('proxies.txt')) {
+                const content = fs.readFileSync('proxies.txt', 'utf-8');
+                const localProxies = content.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line && line.includes(':'))
+                    .map(proxy => ({ proxy, type: 'auto' }));
+                proxies = localProxies;
+                console.log(`Loaded ${proxies.length} proxies from local file`);
+            }
         }
     } catch (error) {
         console.error('Error loading proxies:', error);
+        if (fs.existsSync('proxies.txt')) {
+            const content = fs.readFileSync('proxies.txt', 'utf-8');
+            const localProxies = content.split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'auto' }));
+            proxies = localProxies;
+            console.log(`Fallback: Loaded ${proxies.length} proxies from local file`);
+        }
     }
 };
 
 const getNextProxy = () => {
     if (proxies.length === 0) return null;
-    const proxy = proxies[currentProxyIndex];
+    const proxyObj = proxies[currentProxyIndex];
     currentProxyIndex = (currentProxyIndex + 1) % proxies.length;
-    return proxy;
+    return proxyObj;
 };
 
-const createProxyAgent = async (proxy) => {
-    const [ip, port] = proxy.split(':');
-    
-    const socksTypes = ['socks5', 'socks4'];
-    
-    for (const type of socksTypes) {
-        try {
-            const agent = new SocksProxyAgent(`${type}://${ip}:${port}`);
-            return agent;
-        } catch (error) {
-            continue;
+const createProxyAgent = (proxyObj) => {
+    try {
+        const { proxy, type } = proxyObj;
+        
+        if (type === 'socks5') {
+            return new SocksProxyAgent(`socks5://${proxy}`);
+        } else if (type === 'socks4') {
+            return new SocksProxyAgent(`socks4://${proxy}`);
+        } else {
+            return new SocksProxyAgent(`socks5://${proxy}`);
         }
+    } catch (error) {
+        console.error('Error creating proxy agent:', error);
+        return null;
     }
-    
-    return null;
 };
 
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
     console.log('Hycron NGL Spam Bot is ready');
-    loadProxies();
+    console.log('Use .setproxy on to load proxies from GitHub');
     updateBotStatus();
 });
 
@@ -144,8 +196,8 @@ const sendNGLMessage = async (username, sessionId, threadId) => {
             };
 
             if (useProxy && proxies.length > 0) {
-                const proxy = getNextProxy();
-                const agent = await createProxyAgent(proxy);
+                const proxyObj = getNextProxy();
+                const agent = createProxyAgent(proxyObj);
                 if (agent) {
                     fetchOptions.agent = agent;
                 }
@@ -296,17 +348,21 @@ client.on('messageCreate', async (message) => {
 
         const status = args[0].toLowerCase();
         if (status === 'on') {
+            const loadingMsg = await message.reply('Loading proxies from GitHub...');
+            await loadProxies();
+            
             if (proxies.length === 0) {
-                return message.reply('No proxies loaded. Please add proxies to proxies.txt');
+                return loadingMsg.edit('Failed to load proxies. Please check your internet connection or add proxies to proxies.txt');
             }
+            
             useProxy = true;
             const embed = new EmbedBuilder()
                 .setTitle('Proxy Status')
                 .setColor(0x57F287)
-                .setDescription(`Proxy enabled with ${proxies.length} proxies loaded`)
+                .setDescription(`Proxy enabled with ${proxies.length} proxies loaded (SOCKS4 + SOCKS5 mixed)`)
                 .setFooter({ text: 'Hycron NGL Spam' })
                 .setTimestamp();
-            return message.reply({ embeds: [embed] });
+            return loadingMsg.edit({ content: null, embeds: [embed] });
         } else if (status === 'off') {
             useProxy = false;
             const embed = new EmbedBuilder()
