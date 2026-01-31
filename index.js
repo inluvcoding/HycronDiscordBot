@@ -1,4 +1,3 @@
-// index.js for hycron
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const crypto = require('crypto');
 
@@ -13,9 +12,9 @@ const client = new Client({
 
 const PREFIX = '.';
 const activeSessions = new Map();
-const REQUIRED_GUILD_ID = '1452999261972201637'; // You can custom this to your guild
-const ADMIN_ID = '986240868761632819'; // ID of the owner
-const BOT_APPLICATION_ID = '1454157889836028148'; // your bot id for .invite command
+const REQUIRED_GUILD_ID = '1452999261972201637';
+const ADMIN_ID = '986240868761632819';
+const BOT_APPLICATION_ID = '1454157889836028148';
 const MAX_DURATION = 5;
 const DEFAULT_THREADS = 10;
 
@@ -34,6 +33,26 @@ const getRandomMessage = () => {
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
     console.log('Hycron NGL Auto-Send Bot is ready');
+    updateBotStatus();
+});
+
+const updateBotStatus = () => {
+    const serverCount = client.guilds.cache.size;
+    client.user.setPresence({
+        activities: [{
+            name: `.hycron | ${serverCount} Servers`,
+            type: 0
+        }],
+        status: 'online'
+    });
+};
+
+client.on('guildCreate', () => {
+    updateBotStatus();
+});
+
+client.on('guildDelete', () => {
+    updateBotStatus();
 });
 
 const isUserInRequiredGuild = async (userId) => {
@@ -321,5 +340,5 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-const TOKEN = 'YOUR_BOT_TOKEN_HERE'; // Replace with your ACTUAL token!
+const TOKEN = 'YOUR_BOT_TOKEN_HERE';
 client.login(TOKEN);
