@@ -1,4 +1,4 @@
-// index.js
+// index.js for hycron
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const crypto = require('crypto');
 
@@ -6,24 +6,53 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
 const PREFIX = '.';
 const activeSessions = new Map();
+const REQUIRED_GUILD_ID = '1452999261972201637'; // You can custom this to your guild
+const ADMIN_ID = '986240868761632819'; // ID of the owner
+const BOT_APPLICATION_ID = '1454157889836028148'; // your bot id for .invite command
+const MAX_DURATION = 5;
+const DEFAULT_THREADS = 10;
+
+let botEnabled = true;
+
+const NGL_MESSAGES = [
+    'Targetted by Hycron',
+    'You got boomed by Hycron',
+    'Hycron always on top!'
+];
+
+const getRandomMessage = () => {
+    return NGL_MESSAGES[Math.floor(Math.random() * NGL_MESSAGES.length)];
+};
 
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
-    console.log('Hycron NGL Bot is ready');
+    console.log('Hycron NGL Auto-Send Bot is ready');
 });
 
-const sendNGLMessage = async (username, message, sessionId) => {
+const isUserInRequiredGuild = async (userId) => {
+    try {
+        const guild = await client.guilds.fetch(REQUIRED_GUILD_ID);
+        const member = await guild.members.fetch(userId);
+        return member !== null;
+    } catch (error) {
+        return false;
+    }
+};
+
+const sendNGLMessage = async (username, sessionId) => {
     const session = activeSessions.get(sessionId);
     if (!session) return;
 
     while (session.active && (Date.now() < session.endTime)) {
         try {
+            const message = getRandomMessage();
             const deviceId = crypto.randomBytes(21).toString('hex');
             const url = 'https://ngl.link/api/submit';
             const headers = {
@@ -125,6 +154,74 @@ client.on('messageCreate', async (message) => {
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
+    if (command === 'setstatus') {
+        if (message.author.id !== ADMIN_ID) {
+            return message.reply('You do not have permission to use this command');
+        }
+
+        if (args.length === 0) {
+            return message.reply('Usage: .setstatus on/off');
+        }
+
+        const status = args[0].toLowerCase();
+        if (status === 'on') {
+            botEnabled = true;
+            const embed = new EmbedBuilder()
+                .setTitle('Hycron Bot Status')
+                .setColor(0x57F287)
+                .setDescription('Hycron bot is now enabled')
+                .setFooter({ text: 'Hycron NGL Auto-Send' })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        } else if (status === 'off') {
+            botEnabled = false;
+            const embed = new EmbedBuilder()
+                .setTitle('Hycron Bot Status')
+                .setColor(0xED4245)
+                .setDescription('Hycron bot is now disabled')
+                .setFooter({ text: 'Hycron NGL Auto-Send' })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        } else {
+            return message.reply('Usage: .setstatus on/off');
+        }
+    }
+
+    if (!botEnabled) {
+        const embed = new EmbedBuilder()
+            .setTitle('Hycron Bot Disabled')
+            .setColor(0xED4245)
+            .setDescription('Hycron bot is now disabled by the owner')
+            .setFooter({ text: 'Hycron NGL Auto-Send' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
+    const hasAccess = await isUserInRequiredGuild(message.author.id);
+    if (!hasAccess && message.author.id !== ADMIN_ID) {
+        const embed = new EmbedBuilder()
+            .setTitle('Access Denied')
+            .setColor(0xED4245)
+            .setDescription('You must be a member of the required guild to use this bot')
+            .setFooter({ text: 'Hycron NGL Auto-Send' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
+    if (command === 'invite') {
+        const inviteLink = `https://discord.com/api/oauth2/authorize?client_id=${BOT_APPLICATION_ID}&permissions=274877909056&scope=bot`;
+        const embed = new EmbedBuilder()
+            .setTitle('Invite Hycron Bot')
+            .setColor(0x5865F2)
+            .setDescription(`[Click here to invite Hycron Bot](${inviteLink})`)
+            .addFields(
+                { name: 'Invite Link', value: inviteLink, inline: false }
+            )
+            .setFooter({ text: 'Hycron NGL Auto-Send' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
     if (command === 'hycron') {
         const embed = new EmbedBuilder()
             .setTitle('Hycron NGL Auto-Send Commands')
@@ -138,12 +235,17 @@ client.on('messageCreate', async (message) => {
                 },
                 {
                     name: '.ngl [username] [duration]',
-                    value: 'Start NGL auto-send spam\nusername: Target NGL username\nduration: Duration in minutes\nDefault threads: 5',
+                    value: `Start NGL auto-send spam\nusername: Target NGL username\nduration: Duration in minutes (max ${MAX_DURATION})\nDefault threads: ${DEFAULT_THREADS}`,
+                    inline: false
+                },
+                {
+                    name: '.invite',
+                    value: 'Get the bot invite link',
                     inline: false
                 },
                 {
                     name: 'Example',
-                    value: '.ngl john123 10',
+                    value: '.ngl john123 3',
                     inline: false
                 }
             )
@@ -159,11 +261,15 @@ client.on('messageCreate', async (message) => {
         }
 
         const username = args[0];
-        const duration = parseInt(args[1]);
-        const threads = 5;
+        let duration = parseInt(args[1]);
+        const threads = DEFAULT_THREADS;
 
         if (isNaN(duration) || duration <= 0) {
             return message.reply('Duration must be a positive number in minutes');
+        }
+
+        if (duration > MAX_DURATION) {
+            return message.reply(`Duration cannot exceed ${MAX_DURATION} minutes`);
         }
 
         const sessionId = `${message.author.id}-${Date.now()}`;
@@ -202,7 +308,7 @@ client.on('messageCreate', async (message) => {
         activeSessions.set(sessionId, session);
 
         for (let i = 0; i < threads; i++) {
-            sendNGLMessage(username, 'Targetted by Hycron!', sessionId);
+            sendNGLMessage(username, sessionId);
         }
 
         const updateInterval = setInterval(async () => {
@@ -215,5 +321,5 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-const TOKEN = 'YOUR_BOT_TOKEN_HERE';
+const TOKEN = 'YOUR_BOT_TOKEN_HERE'; // Replace with your ACTUAL token!
 client.login(TOKEN);
