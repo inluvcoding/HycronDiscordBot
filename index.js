@@ -17,7 +17,7 @@ const PREFIX = '.';
 const REQUIRED_GUILD_ID = '1452999261972201637';
 const ADMIN_ID = '986240868761632819';
 const BOT_APPLICATION_ID = '1454157889836028148';
-const MAX_DURATION = 5; // minutes
+const MAX_DURATION = 5;
 const DEFAULT_THREADS = 10;
 const MAX_CONCURRENT_TASKS = 5;
 
@@ -35,10 +35,26 @@ const DEFAULT_MESSAGES = [
     'Hycron always on top!'
 ];
 
-// ============= DEVICE ID GENERATOR (UUID v4 format) =============
-// Based on your test: f59492ab-88a2-4880-8404-4fc30da66834
+// ============= DEVICE ID GENERATOR (PYTHON SCRIPT FORMAT) =============
+// Python code:
+// def eszkozidgeneralas():
+//   eszkozid = uuid.uuid4().hex
+//   return "-".join([eszkozid[i:i+8] for i in range(0, 32, 8)])
+// 
+// This creates: 8-8-8-8 format (32 hex chars split into 4 groups of 8)
+// Example: "a1b2c3d4-e5f6g7h8-i9j0k1l2-m3n4o5p6"
 const generateDeviceId = () => {
-    return crypto.randomUUID(); // Generates proper UUID v4 format
+    // Generate 32 random hex characters (like uuid.uuid4().hex in Python)
+    const hexString = crypto.randomBytes(16).toString('hex'); // 16 bytes = 32 hex chars
+    
+    // Split into 4 groups of 8 characters with dashes
+    // This matches the Python script exactly
+    const parts = [];
+    for (let i = 0; i < 32; i += 8) {
+        parts.push(hexString.substring(i, i + 8));
+    }
+    
+    return parts.join('-');
 };
 
 // ============= LOAD MESSAGES =============
@@ -85,7 +101,7 @@ const loadProxies = async () => {
                 .map(line => line.trim())
                 .filter(line => line && line.includes(':'));
             
-            // Shuffle proxies
+            // Shuffle
             for (let i = proxyList.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [proxyList[i], proxyList[j]] = [proxyList[j], proxyList[i]];
@@ -95,7 +111,6 @@ const loadProxies = async () => {
             console.log(`✅ Loaded ${proxies.length} proxies`);
         }
 
-        // Fallback to local file
         if (proxies.length === 0 && fs.existsSync('proxies.txt')) {
             const content = fs.readFileSync('proxies.txt', 'utf-8');
             proxies = content.split('\n')
@@ -115,42 +130,42 @@ const getNextProxy = () => {
     return proxy;
 };
 
-// ============= MAIN NGL SPAM FUNCTION =============
+// ============= MAIN NGL SPAM FUNCTION (EXACT PYTHON SCRIPT LOGIC) =============
 const sendNGLMessage = async (username, sessionId, threadId) => {
     const session = activeSessions.get(sessionId);
     if (!session) return;
 
-    let consecutiveErrors = 0;
+    let nemsikerult = 0; // "nemsikerult" = "failed" in Hungarian (matching Python var name)
 
     while (session.active && (Date.now() < session.endTime)) {
         try {
-            const message = getRandomMessage();
-            const deviceId = generateDeviceId(); // UUID v4 format
+            const kerdes = getRandomMessage(); // "kerdes" = "question" in Hungarian
+            const eszkozid = generateDeviceId(); // "eszkozid" = "deviceId" in Hungarian
             
-            // API endpoint from your test
             const url = 'https://ngl.link/api/submit';
             
-            // Headers (minimal but effective)
-            const headers = {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Origin': 'https://ngl.link',
+            // Headers matching Python script EXACTLY
+            const fejresz = {
                 'Referer': `https://ngl.link/${username}`,
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0'
             };
 
-            // Body matching your test format exactly
-            const params = new URLSearchParams({
-                username: username,
-                question: message,
-                deviceId: deviceId,
-                gameSlug: '',
-                referrer: ''
-            });
+            // Data matching Python script EXACTLY
+            const adat = {
+                'username': username,
+                'question': kerdes,
+                'deviceId': eszkozid,
+                'gameSlug': '',
+                'referrer': ''
+            };
+
+            // Convert to URL-encoded format
+            const params = new URLSearchParams(adat);
 
             let fetchOptions = {
                 method: 'POST',
-                headers: headers,
+                headers: fejresz,
                 body: params.toString()
             };
 
@@ -161,59 +176,52 @@ const sendNGLMessage = async (username, sessionId, threadId) => {
                     const agent = new SocksProxyAgent(`socks5://${proxy}`);
                     fetchOptions.agent = agent;
                 } catch (err) {
-                    console.log(`⚠️ Thread ${threadId}: Bad proxy, skipping...`);
+                    console.log(`⚠️ Thread ${threadId}: Bad proxy`);
                 }
             }
 
-            const response = await fetch(url, fetchOptions);
+            const elkuld = await fetch(url, fetchOptions);
 
-            if (response.status === 200) {
-                // Success!
+            if (elkuld.status === 200) {
+                // SUCCESS - matches Python script behavior
+                nemsikerult = 0;
                 session.sent++;
                 session.lastSuccess = Date.now();
-                consecutiveErrors = 0;
                 console.log(`✅ Thread ${threadId}: Message sent (Total: ${session.sent})`);
                 
-                // Small delay to avoid instant rate limit
+                // 1 second delay like Python script
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-            } else if (response.status === 429) {
-                // Rate limited
-                session.errors++;
-                session.lastError = 'Rate Limited (429)';
-                console.log(`⏳ Thread ${threadId}: Rate limited - waiting 30s`);
-                await new Promise(resolve => setTimeout(resolve, 30000));
-                consecutiveErrors = 0; // Reset on rate limit
-                
             } else {
-                // Other error
+                // ERROR - matches Python script behavior
+                nemsikerult++;
                 session.errors++;
-                session.lastError = `HTTP ${response.status}`;
-                consecutiveErrors++;
-                console.log(`❌ Thread ${threadId}: HTTP ${response.status}`);
+                session.lastError = `HTTP ${elkuld.status}`;
                 
-                // If too many errors, stop this thread
-                if (consecutiveErrors >= 5) {
-                    console.log(`🛑 Thread ${threadId}: Too many consecutive errors, stopping`);
+                if (nemsikerult < 4) {
+                    // Retry logic from Python: try 3 times with 20s wait
+                    console.log(`⚠️ Thread ${threadId}: [${elkuld.status} (${nemsikerult}/3)] Failed! Retrying after 20s`);
+                    await new Promise(resolve => setTimeout(resolve, 20000));
+                } else {
+                    // After 3 failures, stop this thread (Python script behavior)
+                    console.log(`🛑 Thread ${threadId}: Failed after 3 attempts, stopping thread`);
+                    session.lastError = `Failed 3x: HTTP ${elkuld.status}`;
                     break;
                 }
-                
-                await new Promise(resolve => setTimeout(resolve, 5000));
             }
 
         } catch (error) {
+            nemsikerult++;
             session.errors++;
             session.lastError = error.message.substring(0, 50);
-            consecutiveErrors++;
             console.error(`❌ Thread ${threadId}: ${error.message}`);
             
-            // Stop thread if too many errors
-            if (consecutiveErrors >= 5) {
-                console.log(`🛑 Thread ${threadId}: Too many consecutive errors, stopping`);
+            if (nemsikerult < 4) {
+                await new Promise(resolve => setTimeout(resolve, 20000));
+            } else {
+                console.log(`🛑 Thread ${threadId}: Too many errors, stopping`);
                 break;
             }
-            
-            await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
 
@@ -247,9 +255,9 @@ const updateStatusEmbed = async (session) => {
             { name: '📊 Rate', value: `\`${rate}/min\``, inline: true },
             { name: '🔒 Proxy', value: proxyStatus, inline: true },
             { name: '📡 Status', value: session.active ? '🟢 **ACTIVE**' : '🔴 **STOPPED**', inline: true },
-            { name: '🏁 Progress', value: `\`${session.threadsCompleted}/${session.threads}\` threads done`, inline: true }
+            { name: '🏁 Progress', value: `\`${session.threadsCompleted}/${session.threads}\` threads`, inline: true }
         )
-        .setFooter({ text: `Hycron NGL Spam | Session: ${session.sessionId.slice(-8)}` })
+        .setFooter({ text: `Hycron NGL Spam | Python Script Logic` })
         .setTimestamp();
 
     if (session.lastError) {
@@ -259,7 +267,7 @@ const updateStatusEmbed = async (session) => {
     try {
         await session.statusMessage.edit({ embeds: [embed] });
     } catch (error) {
-        // Ignore edit errors
+        // Ignore
     }
 };
 
@@ -290,7 +298,7 @@ const finalizeSession = async (session) => {
     try {
         await session.statusMessage.edit({ embeds: [embed] });
     } catch (error) {
-        // Ignore edit errors
+        // Ignore
     }
 
     activeSessions.delete(session.sessionId);
@@ -300,8 +308,14 @@ const finalizeSession = async (session) => {
 // ============= BOT EVENTS =============
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
-    console.log(`🚀 Hycron NGL Spam Bot is ready!`);
+    console.log(`🚀 Hycron NGL Spam Bot - Python Script Logic`);
     console.log(`📊 Servers: ${client.guilds.cache.size}`);
+    
+    // Test device ID generation
+    const testId = generateDeviceId();
+    console.log(`🔍 Device ID test: ${testId}`);
+    console.log(`   Format: 8-8-8-8 (Python script format)`);
+    
     loadCustomMessages();
     updateBotStatus();
 });
@@ -383,6 +397,15 @@ client.on('messageCreate', async (message) => {
         return message.reply(`✅ Reloaded **${customMessages.length}** messages`);
     }
 
+    if (command === 'testdevice') {
+        if (message.author.id !== ADMIN_ID) {
+            return message.reply('❌ Admin only!');
+        }
+
+        const testId = generateDeviceId();
+        return message.reply(`🔍 Test Device ID:\n\`${testId}\`\n\nFormat: 8-8-8-8 (matches Python script)`);
+    }
+
     // Check if bot is enabled
     if (!botEnabled) {
         return message.reply('❌ Bot is currently **DISABLED** by admin');
@@ -410,29 +433,29 @@ client.on('messageCreate', async (message) => {
         const embed = new EmbedBuilder()
             .setTitle('📚 Hycron NGL Spam - Commands')
             .setColor(0x5865F2)
-            .setDescription('**Available Commands:**')
+            .setDescription('**Based on Python NGL-Spammer v4.3**')
             .addFields(
                 { 
                     name: '`.ngl <username> <duration>`', 
-                    value: `Start NGL spam\n• Max duration: ${MAX_DURATION} minutes\n• Threads: ${DEFAULT_THREADS}\n• Messages: ${customMessages.length} loaded`, 
+                    value: `Start NGL spam\n• Max: ${MAX_DURATION} minutes\n• Threads: ${DEFAULT_THREADS}\n• Messages: ${customMessages.length}\n• Device ID: 8-8-8-8 format`, 
                     inline: false 
                 },
-                { name: '`.hycron`', value: 'Show this help menu', inline: false },
-                { name: '`.invite`', value: 'Get bot invite link', inline: false },
+                { name: '`.hycron`', value: 'Show this help', inline: false },
+                { name: '`.invite`', value: 'Get invite link', inline: false },
                 { name: '\u200B', value: '**Admin Commands:**', inline: false },
                 { name: '`.setstatus on/off`', value: 'Enable/disable bot', inline: true },
                 { name: '`.setproxy on/off`', value: 'Enable/disable proxy', inline: true },
                 { name: '`.reloadmsg`', value: 'Reload messages', inline: true },
+                { name: '`.testdevice`', value: 'Test device ID', inline: true },
                 { name: '\u200B', value: '**Example:**', inline: false },
-                { name: '`.ngl john123 3`', value: 'Spam user `john123` for 3 minutes', inline: false }
+                { name: '`.ngl john123 3`', value: 'Spam `john123` for 3 minutes', inline: false }
             )
-            .setFooter({ text: 'Hycron NGL Spam | Made by Hycron' })
+            .setFooter({ text: 'Hycron NGL Spam | Python Logic' })
             .setTimestamp();
         return message.reply({ embeds: [embed] });
     }
 
     if (command === 'ngl') {
-        // Check concurrent sessions
         const userActiveSessions = Array.from(activeSessions.values())
             .filter(s => s.userId === message.author.id && s.active);
 
@@ -440,7 +463,6 @@ client.on('messageCreate', async (message) => {
             return message.reply(`❌ You can only run **${MAX_CONCURRENT_TASKS}** sessions at once!`);
         }
 
-        // Parse arguments
         if (args.length < 2) {
             return message.reply('❌ Usage: `.ngl <username> <duration>`\nExample: `.ngl john123 3`');
         }
@@ -456,7 +478,6 @@ client.on('messageCreate', async (message) => {
             return message.reply(`❌ Duration cannot exceed **${MAX_DURATION}** minutes`);
         }
 
-        // Create session
         const sessionId = `${message.author.id}-${Date.now()}`;
         const startTime = Date.now();
         const endTime = startTime + (duration * 60 * 1000);
@@ -471,7 +492,7 @@ client.on('messageCreate', async (message) => {
                 { name: '🧵 Threads', value: `\`${threads}\``, inline: true },
                 { name: '📡 Status', value: '🟡 **STARTING**', inline: false }
             )
-            .setFooter({ text: 'Initializing threads...' })
+            .setFooter({ text: 'Python Script Logic | Initializing...' })
             .setTimestamp();
 
         const statusMessage = await message.reply({ embeds: [initialEmbed] });
@@ -500,9 +521,9 @@ client.on('messageCreate', async (message) => {
             sendNGLMessage(username, sessionId, i);
         }
 
-        console.log(`🚀 Started session ${sessionId}: ${username}, ${duration}m, ${threads} threads`);
+        console.log(`🚀 Session ${sessionId}: ${username}, ${duration}m, ${threads} threads`);
 
-        // Update status every 3 seconds
+        // Update every 3 seconds
         const updateInterval = setInterval(async () => {
             if (!session.active || Date.now() >= session.endTime) {
                 clearInterval(updateInterval);
@@ -511,11 +532,10 @@ client.on('messageCreate', async (message) => {
             await updateStatusEmbed(session);
         }, 3000);
 
-        // Initial update after 1 second
         setTimeout(() => updateStatusEmbed(session), 1000);
     }
 });
 
 // ============= START BOT =============
-const TOKEN = 'YOUR_TOKEN_HERE';
+const TOKEN = 'TOKEN_DISCORD';
 client.login(TOKEN);
