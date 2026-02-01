@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const crypto = require('crypto');
 const fs = require('fs');
 const { SocksProxyAgent } = require('socks-proxy-agent');
@@ -273,10 +273,13 @@ const updateStatusEmbed = async (session) => {
 
     const rate = elapsed > 0 ? (session.sent / elapsed * 60).toFixed(1) : 0;
     const proxyStatus = useProxy ? `Enabled (${proxies.length} proxies)` : 'Disabled';
+    
+    const hasErrors = session.errors > 0;
+    const embedColor = hasErrors ? 0xFF6B6B : 0x5865F2;
 
     const embed = new EmbedBuilder()
-        .setTitle('Hycron NGL Spam')
-        .setColor(0x5865F2)
+        .setTitle(hasErrors ? '⚠️ Hycron NGL Spam - Errors Detected' : 'Hycron NGL Spam')
+        .setColor(embedColor)
         .addFields(
             { name: 'Target', value: session.username, inline: true },
             { name: 'Duration', value: `${session.duration}m`, inline: true },
@@ -287,16 +290,42 @@ const updateStatusEmbed = async (session) => {
             { name: 'Rate', value: `${rate}/min`, inline: true },
             { name: 'Proxy', value: proxyStatus, inline: true },
             { name: 'Status', value: session.active ? 'Spamming' : 'Completed', inline: true }
-        )
-        .setFooter({ text: 'Hycron NGL Spam' })
-        .setTimestamp();
+        );
 
     if (session.lastError) {
         embed.addFields({ name: 'Last Error', value: session.lastError, inline: false });
     }
 
+    if (hasErrors) {
+        embed.addFields({ 
+            name: '📌 Notice', 
+            value: 'Use Python version for higher success rate spamming', 
+            inline: false 
+        });
+    }
+
+    embed.setFooter({ text: 'Hycron NGL Spam' })
+        .setTimestamp();
+
+    const components = [];
+    if (hasErrors) {
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setLabel('Access Python Version')
+                    .setURL('https://github.com/inluvcoding/Hycron-NGL-Spammer')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('🐍')
+            );
+        components.push(row);
+    }
+
     try {
-        await session.statusMessage.edit({ embeds: [embed] });
+        if (components.length > 0) {
+            await session.statusMessage.edit({ embeds: [embed], components });
+        } else {
+            await session.statusMessage.edit({ embeds: [embed], components: [] });
+        }
     } catch (error) {
         console.error('Failed to update status embed:', error);
     }
@@ -306,9 +335,12 @@ const finalizeSession = async (session) => {
     const totalTime = Math.floor((Date.now() - session.startTime) / 1000);
     const avgRate = totalTime > 0 ? (session.sent / totalTime * 60).toFixed(1) : 0;
 
+    const hasErrors = session.errors > 0;
+    const embedColor = hasErrors ? 0xFF6B6B : 0x57F287;
+
     const embed = new EmbedBuilder()
         .setTitle('Hycron NGL Spam - Completed')
-        .setColor(0x57F287)
+        .setColor(embedColor)
         .addFields(
             { name: 'Target', value: session.username, inline: true },
             { name: 'Duration', value: `${session.duration}m`, inline: true },
@@ -317,12 +349,38 @@ const finalizeSession = async (session) => {
             { name: 'Total Errors', value: `${session.errors}`, inline: true },
             { name: 'Avg Rate', value: `${avgRate}/min`, inline: true },
             { name: 'Status', value: 'Finished', inline: false }
-        )
-        .setFooter({ text: 'Hycron NGL Spam' })
+        );
+
+    if (hasErrors) {
+        embed.addFields({ 
+            name: '📌 Notice', 
+            value: 'Use Python version for higher success rate spamming', 
+            inline: false 
+        });
+    }
+
+    embed.setFooter({ text: 'Hycron NGL Spam' })
         .setTimestamp();
 
+    const components = [];
+    if (hasErrors) {
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setLabel('Access Python Version')
+                    .setURL('https://github.com/inluvcoding/Hycron-NGL-Spammer')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('🐍')
+            );
+        components.push(row);
+    }
+
     try {
-        await session.statusMessage.edit({ embeds: [embed] });
+        if (components.length > 0) {
+            await session.statusMessage.edit({ embeds: [embed], components });
+        } else {
+            await session.statusMessage.edit({ embeds: [embed], components: [] });
+        }
     } catch (error) {
         console.error('Failed to finalize status embed:', error);
     }
