@@ -586,5 +586,5 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-const TOKEN = 'YOUR_TOKEN_HERE';
+const TOKEN = 'YOUR_BOT_TOKEN_HERE';
 client.login(TOKEN);
