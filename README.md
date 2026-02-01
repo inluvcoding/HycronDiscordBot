@@ -1,277 +1,228 @@
-# Hycron NGL Spam Discord Bot
+# Hycron NGL Spam Bot (Python-Based Fix)
 
-A Discord bot that automates NGL message spamming with real-time status tracking and proxy support.
+## 🎯 What Was Fixed
 
-## Features
+This version is based on the working Python NGL spam script and includes:
 
-- Auto-spam NGL messages to specified usernames
-- Multi-threaded message sending (default: 10 threads)
-- Real-time status dashboard with live updates
-- Configurable duration in minutes (max 5 minutes)
-- Maximum 5 concurrent spam tasks per user
-- Proxy support with automatic type detection
-- Automatic error handling and rate limit management
-- Guild-based access control
-- Admin controls to enable/disable bot and proxy
-- Random message selection from 3 variants
-- Bot invite link command
-- Detailed statistics: send rate, errors, proxy status
+1. ✅ **Correct Device ID Generation** - Matches Python script format (8-4-4-4-12)
+2. ✅ **Proper Headers** - Exact headers from working Python script
+3. ✅ **User Agent Rotation** - Randomizes user agents like Python version
+4. ✅ **Better Error Handling** - Implements the "change info after 4 failures" logic
+5. ✅ **Proxy Rotation** - Rotates proxies on failures
+6. ✅ **Rate Limit Management** - Proper delays and backoff
 
-## Setup
+## 📋 Key Differences from Original
 
-1. Install Node.js (version 16.9.0 or higher)
+### Original (Broken):
+```javascript
+// Wrong device ID format
+const deviceId = crypto.randomBytes(21).toString('hex');
 
-2. Install dependencies:
+// Static user agent
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0)...'
+```
+
+### Fixed (Python-Based):
+```javascript
+// Correct device ID format (8-4-4-4-12)
+const deviceId = generateDeviceId();
+// Returns: "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6"
+
+// Random user agent rotation
+'user-agent': getRandomUserAgent()
+```
+
+## 🚀 Installation
+
+### 1. Install Dependencies
+
 ```bash
-npm install
+npm install discord.js socks-proxy-agent
 ```
 
-3. Create a Discord Bot:
-   - Go to https://discord.com/developers/applications
-   - Click "New Application"
-   - Go to "Bot" section and click "Add Bot"
-   - Enable "Message Content Intent" under Privileged Gateway Intents
-   - Enable "Server Members Intent" under Privileged Gateway Intents
-   - Copy the bot token
+### 2. Setup Files
 
-4. Configure the bot:
-   - Open `index.js`
-   - Replace `YOUR_BOT_TOKEN_HERE` with your actual bot token
+Place these files in the same directory:
+- `ngl-bot-python-based.js` (main bot file)
+- `messages.txt` (custom messages - optional)
+- `user-agents.txt` (custom user agents - optional)
+- `proxies.txt` (your proxies - optional)
 
-5. Configure proxies (optional):
-   - Proxies are automatically loaded from GitHub when you use `.setproxy on`
-   - Or manually create `proxies.txt` in format `ip:port` (one per line)
-   - Example:
-   ```
-   124.248.168.90:1080
-   192.168.1.1:9050
-   ```
+### 3. Configure Bot Token
 
-6. Configure custom messages (optional):
-   - Create `messages.txt` to customize spam messages
-   - Add one message per line
-   - Bot will randomly select from your messages
-   - Example:
-   ```
-   Targetted by Hycron
-   You got boomed by Hycron
-   Hycron always on top!
-   ```
+Edit line at the bottom of the file:
+```javascript
+const TOKEN = 'YOUR_BOT_TOKEN_HERE';
+```
 
-7. Invite the bot to your server:
-   - Go to OAuth2 > URL Generator
-   - Select scopes: `bot`
-   - Select permissions: `Send Messages`, `Embed Links`, `Read Message History`
-   - Copy the generated URL and open it in your browser
+### 4. Run the Bot
 
-8. Start the bot:
 ```bash
-npm start
+node ngl-bot-python-based.js
 ```
 
-## Access Requirements
+## 📝 Commands
 
-Users must be members of the required guild (ID: 1452999261972201637) to use the bot commands.
+### User Commands:
+- `.hycron` - Show all commands
+- `.ngl [username] [duration]` - Start spam (e.g., `.ngl john123 3`)
+- `.invite` - Get bot invite link
 
-Admin ID: 986240868761632819 has full access regardless of guild membership.
+### Admin Commands:
+- `.setstatus on/off` - Enable/disable bot
+- `.setproxy on/off` - Enable/disable proxy
+- `.reloadmsg` - Reload messages from messages.txt
+- `.reloadua` - Reload user agents from user-agents.txt
 
-## Commands
+## 🔧 Configuration
 
-### .hycron
-Display all available commands and usage information.
-
-### .ngl [username] [duration]
-Start NGL spam.
-
-Parameters:
-- `username`: Target NGL username
-- `duration`: Duration in minutes (maximum 5 minutes)
-
-Default threads: 10
-Max concurrent tasks: 5 per user
-
-Example:
-```
-.ngl john123 3
-```
-
-This will spam the NGL user "john123" for 3 minutes using 10 threads.
-
-### .invite
-Get the bot invite link to add Hycron to other servers.
-
-### .setstatus [on/off]
-Admin only command to enable or disable the bot.
-
-Parameters:
-- `on`: Enable the bot
-- `off`: Disable the bot
-
-Example:
-```
-.setstatus off
-```
-
-When disabled, all users will see "Hycron bot is now disabled by the owner" message.
-
-### .setproxy [on/off]
-Admin only command to enable or disable proxy usage.
-
-When enabled, automatically loads proxies from GitHub (SOCKS4 + SOCKS5 mixed).
-
-Parameters:
-- `on`: Enable proxy and load from GitHub
-- `off`: Disable proxy (use direct connection)
-
-Example:
-```
-.setproxy on
-```
-
-The bot will fetch fresh proxies from:
-- https://github.com/monosans/proxy-list (SOCKS4 + SOCKS5)
-
-### .reloadmsg
-Admin only command to reload custom messages from messages.txt.
-
-Example:
-```
-.reloadmsg
-```
-
-After editing messages.txt, use this command to reload without restarting the bot.
-
-## Message Variants
-
-### Custom Messages
-You can customize the messages sent by creating a `messages.txt` file:
-- One message per line
-- Bot will randomly select from your custom messages
-- Empty lines are ignored
-
-Example messages.txt:
+### messages.txt
+Add one message per line:
 ```
 Targetted by Hycron
 You got boomed by Hycron
 Hycron always on top!
-Hycron never stops
-You just got Hycron'd
+Custom message here
+Another custom message
 ```
 
-### Default Messages
-If messages.txt doesn't exist or is empty, the bot uses these default messages:
-- "Targetted by Hycron"
-- "You got boomed by Hycron"
-- "Hycron always on top!"
-
-### Reloading Messages
-Use `.reloadmsg` command (admin only) to reload messages.txt without restarting the bot.
-
-## Status Dashboard
-
-When you run the `.ngl` command, the bot will reply with a real-time status dashboard showing:
-- Target: The username being targeted
-- Duration: Total duration in minutes
-- Threads: Number of concurrent threads (10)
-- Sent: Number of successfully sent messages
-- Errors: Number of failed attempts
-- Remaining: Time remaining in the session
-- Rate: Messages sent per minute
-- Proxy: Proxy status (Enabled/Disabled with count)
-- Status: Current status (Spamming/Completed)
-- Last Error: Most recent error (if any)
-
-The dashboard updates every 2 seconds until the duration expires.
-
-## Proxy Support
-
-### Automatic Proxy Loading
-When you use `.setproxy on`, the bot automatically fetches proxies from GitHub:
-- SOCKS5: https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks5.txt
-- SOCKS4: https://github.com/monosans/proxy-list/raw/refs/heads/main/proxies/socks4.txt
-
-The bot will:
-1. Download both SOCKS4 and SOCKS5 proxy lists
-2. Mix them together randomly
-3. Use the combined pool for spam sessions
-
-### Manual Proxy Setup (Optional)
-You can also add proxies manually to `proxies.txt` in the format:
+### user-agents.txt
+Add one user agent per line:
 ```
-ip:port
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...
 ```
 
-Example:
+### proxies.txt (Optional)
+Add one proxy per line (format: `ip:port`):
 ```
-124.248.168.90:1080
-192.168.1.1:9050
-45.76.123.45:1080
+123.456.789.012:1080
+98.765.432.101:1080
 ```
 
-### Proxy Features
-- Automatic SOCKS4/SOCKS5 detection from GitHub
-- Round-robin proxy rotation
-- Proxy status displayed in dashboard
-- Enable/disable via `.setproxy` command
-- Fallback to direct connection if proxy fails
-- Mixed SOCKS4 + SOCKS5 for better success rate
+Or use `.setproxy on` to auto-load from GitHub.
 
-## Technical Details
+## 🎮 Usage Example
 
-- Uses Discord.js v14
-- SOCKS proxy support via socks-proxy-agent
-- Implements proper rate limit handling
-- 25 second delay on rate limits
-- 5 second delay on errors
-- Automatic session cleanup
-- Multi-threaded concurrent sending
-- Guild membership verification
-- Admin-only bot control
-- Per-user concurrent task limiting
+```
+.ngl john123 3
+```
+This will:
+- Target user: john123
+- Duration: 3 minutes
+- Threads: 10 (default)
+- Send random messages from messages.txt
+- Rotate user agents from user-agents.txt
+- Use proxies if enabled
 
-## Configuration
+## 🔍 Key Features
 
-### Required Guild ID
-`1452999261972201637`
+### From Python Script:
+1. **Device ID Format**: `8-4-4-4-12` character format
+2. **User Agent Rotation**: Random UA for each request
+3. **Failure Handling**: Changes info after 4 consecutive failures
+4. **Proxy Rotation**: Rotates proxies on errors
+5. **Rate Limit Respect**: 25s wait on 429 errors
 
-### Admin User ID
-`986240868761632819`
+### Enhanced for Discord:
+1. **Multi-Threading**: 10 concurrent threads per session
+2. **Real-Time Updates**: Status updates every 2 seconds
+3. **Session Management**: Up to 5 concurrent sessions per user
+4. **Rich Embeds**: Beautiful Discord embeds
+5. **Guild Access Control**: Require membership to use
 
-### Bot Application ID
-`1454157889836028148`
+## ⚙️ Settings (in code)
 
-### Limits
-- Maximum duration: 5 minutes
-- Default threads: 10
-- Max concurrent tasks per user: 5
+```javascript
+const MAX_DURATION = 5;              // Max minutes per session
+const DEFAULT_THREADS = 10;          // Threads per session
+const MAX_CONCURRENT_TASKS = 5;      // Max sessions per user
+const REQUIRED_GUILD_ID = 'YOUR_GUILD_ID';
+const ADMIN_ID = 'YOUR_ADMIN_ID';
+```
 
-## Required Intents
+## 🛡️ Error Handling
 
-Make sure the following intents are enabled in Discord Developer Portal:
-1. Message Content Intent
-2. Server Members Intent
+The bot handles:
+- ✅ Rate limiting (429) - Waits 25 seconds
+- ✅ 404 errors - Stops thread after 3 consecutive failures
+- ✅ Proxy errors - Rotates to next proxy
+- ✅ Network errors - Retries with 5s delay
+- ✅ Bad responses - Changes info after 4 failures
 
-## Notes
+## 📊 Status Updates
 
-- This bot is for educational purposes only
-- Use responsibly and respect NGL's terms of service
-- The bot requires Message Content Intent and Server Members Intent to be enabled
-- Sessions are tracked per user to prevent conflicts
-- Only users in the required guild can use the bot
-- Admin can enable/disable the bot and proxy at any time
-- Each user can run maximum 5 spam tasks simultaneously
+Real-time tracking shows:
+- Total messages sent
+- Total errors
+- Current rate (messages/min)
+- Remaining time
+- Last error
+- Proxy status
+- Thread completion
 
-## Troubleshooting
+## 🔒 Security Notes
 
-If the bot is not responding to commands:
-1. Ensure Message Content Intent and Server Members Intent are enabled in Discord Developer Portal
-2. Verify the bot has proper permissions in your server
-3. Check that the bot token is correctly set
-4. Make sure Node.js version is 16.9.0 or higher
-5. Verify you are a member of the required guild
-6. Check if the bot is enabled using .setstatus command
-7. For proxy issues, verify proxies.txt format and proxy availability
+⚠️ **Important**:
+- Your bot token is visible in the code - keep it private
+- Consider using environment variables: `process.env.BOT_TOKEN`
+- The Python script shows this endpoint IS working
+- NGL may still implement anti-bot measures over time
 
-## License
+## 🐛 Troubleshooting
 
-ISC
+### Still getting 404?
+1. The Python script works, so endpoint is correct
+2. Check if NGL updated their API today
+3. Try without proxy first: `.setproxy off`
+4. Test with Python script to confirm endpoint still works
+
+### Rate Limited?
+- Normal! The bot waits 25s automatically
+- Using proxies helps: `.setproxy on`
+- Reduce threads if needed (edit DEFAULT_THREADS)
+
+### Proxies not working?
+- Use `.setproxy on` to auto-load from GitHub
+- Or manually add to proxies.txt (one per line: ip:port)
+- Bad proxies are automatically rotated
+
+## 📈 Performance Tips
+
+1. **Use Proxies**: Enable with `.setproxy on`
+2. **Custom Messages**: Add variety to messages.txt
+3. **User Agents**: More UAs = more realistic
+4. **Optimal Duration**: 3-5 minutes works best
+5. **Monitor Status**: Watch for rate limits
+
+## 🎓 How It Works
+
+Based on the Python script analysis:
+
+1. Generates proper device ID (8-4-4-4-12 format)
+2. Selects random user agent from pool
+3. Sends POST to https://ngl.link/api/submit
+4. If success (200): count and continue
+5. If rate limit (429): wait 25s
+6. If 4 failures: rotate proxy/info
+7. Updates Discord embed every 2s
+
+## 📦 Files Included
+
+- `ngl-bot-python-based.js` - Main bot (fixed version)
+- `messages.txt` - Example messages
+- `user-agents.txt` - Example user agents
+- `README.md` - This file
+
+## 🆘 Support
+
+If issues persist:
+1. Test the Python script first
+2. Check if NGL.link changed API
+3. Enable debug logging in console
+4. Try direct connection (no proxy)
+5. Verify user exists on NGL.link
+
+---
+
+**Made by Hycron** | Based on working Python NGL spam script
